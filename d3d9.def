@@ -1,0 +1,23 @@
+; The d3d9.dll the mod ships as. Every export but Direct3DCreate9 is a jmp thunk in src/proxy.cpp
+; that jumps into the real d3d9.dll (the system's, or d3d9_orig.dll beside the mod); Direct3DCreate9
+; is the mod's own (src/overlay_dx9.cpp): it calls the real one and hooks what it hands back.
+; The list is src/proxy_exports.inc's, kept by hand: d3d9.dll's exports do not change.
+LIBRARY d3d9
+EXPORTS
+    Direct3DCreate9 = re5cc_Direct3DCreate9@4
+    D3DPERF_BeginEvent = d3d9_0
+    D3DPERF_EndEvent = d3d9_1
+    D3DPERF_GetStatus = d3d9_2
+    D3DPERF_QueryRepeatFrame = d3d9_3
+    D3DPERF_SetMarker = d3d9_4
+    D3DPERF_SetOptions = d3d9_5
+    D3DPERF_SetRegion = d3d9_6
+    DebugSetLevel = d3d9_7
+    DebugSetMute = d3d9_8
+    Direct3D9EnableMaximizedWindowedModeShim = d3d9_9
+    Direct3DCreate9Ex = d3d9_10
+    Direct3DCreate9On12 = d3d9_11
+    Direct3DCreate9On12Ex = d3d9_12
+    Direct3DShaderValidatorCreate9 = d3d9_13
+    PSGPError = d3d9_14
+    PSGPSampleTexture = d3d9_15
