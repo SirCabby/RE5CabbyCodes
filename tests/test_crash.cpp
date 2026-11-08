@@ -14,7 +14,17 @@
 //   and the real FatalAppExitA then gets the game's arguments;
 // - ExitProcess(0), a quit, is one line; any other code is logged with where it came
 //   from; the real ExitProcess gets the code;
-// - an exception still logs its kind, the address touched and the stack.
+// - an exception still logs its kind, the address touched and the stack; a
+//   floating-point one its x87 state too;
+// - as Windows first reports it (before any handler, which may end the program first,
+//   as on a user's first Windows run, 2026-11-05): a fault in this program's code
+//   ("the mod's"), or in another module with this program's return address near the
+//   top of the stack, is logged; one with nothing of it near there, and anything not
+//   an error (a breakpoint, a debugger's message, a thread's name, a C++ throw), is
+//   not; four a run at most; nothing handled;
+// - where_is: another thread's place and its stack's code addresses, read while it
+//   is held; not this thread's, nor one that is not there;
+// - a filter that replaced ours: named by its module, ours back on top, chained to it.
 #include "../src/crash.cpp"
 
 #include <cstdarg>
@@ -119,6 +129,36 @@ __attribute__((noinline)) void game_abort() {
 
 int touch_me() { return 1; }
 
+// A thread of this program's, parked in a wait.
+HANDLE g_park = nullptr;
+__attribute__((noinline)) DWORD WINAPI parked(LPVOID) {
+  WaitForSingleObject(g_park, INFINITE);
+  asm volatile("" ::: "memory");
+  return 0;
+}
+
+LONG WINAPI other_filter(EXCEPTION_POINTERS*) { return EXCEPTION_CONTINUE_SEARCH; }
+
+// A first report of `code` at `at`, the stack `stack`, as Windows hands it to the
+// vectored handler: the lines it logged.
+std::vector<std::string> first_chance(DWORD code, void* at, void** stack, CONTEXT* ctx = nullptr) {
+  g_lines.clear();
+  EXCEPTION_RECORD rec{};
+  rec.ExceptionCode = code;
+  rec.ExceptionAddress = at;
+  if (code == EXCEPTION_ACCESS_VIOLATION) {
+    rec.NumberParameters = 2;
+    rec.ExceptionInformation[1] = 0x10;
+  }
+  CONTEXT own{};
+  if (!ctx) ctx = &own;
+  ctx->Esp = static_cast<DWORD>(reinterpret_cast<uintptr_t>(stack));
+  EXCEPTION_POINTERS ptrs{&rec, ctx};
+  const LONG r = on_first_chance(&ptrs);
+  if (r != EXCEPTION_CONTINUE_SEARCH) g_lines.emplace_back("(handled!)");
+  return g_lines;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -176,6 +216,88 @@ int main(int argc, char** argv) {
   check(r == EXCEPTION_CONTINUE_SEARCH && logged("CRASH: ACCESS_VIOLATION") && logged("reading address 00000010"),
         "an exception: its kind and the address touched");
   check(logged(("stack[001] " + where(reinterpret_cast<void*>(&touch_me))).c_str()), "... and the stack's code addresses");
+
+  // A floating-point exception at the top-level filter: its x87 state.
+  g_lines.clear();
+  rec.ExceptionCode = EXCEPTION_FLT_STACK_CHECK;
+  rec.NumberParameters = 0;
+  ctx.ContextFlags = CONTEXT_FLOATING_POINT;
+  ctx.FloatSave.ControlWord = 0x027E;
+  ctx.FloatSave.StatusWord = 0x82C1;
+  ctx.FloatSave.TagWord = 0x0000;
+  on_exception(&ptrs);
+  check(logged("CRASH: FLT_STACK_CHECK (0xC0000092)") &&
+            logged("x87 control word 027E, status 82C1, tags 0000 - unmasked: invalid; an exception pending; 8 "
+                   "register(s) in use"),
+        "a floating-point exception: named, with its x87 state");
+
+  // As Windows first reports an exception: the mod's own logged, before any handler.
+  void* nothing[32] = {};
+  void* called_from_here[32] = {nullptr, nullptr, reinterpret_cast<void*>(&touch_me)};
+  const std::string here = where(reinterpret_cast<void*>(&touch_me));
+  std::vector<std::string> l = first_chance(EXCEPTION_ACCESS_VIOLATION, reinterpret_cast<void*>(&touch_me), nothing);
+  check(!l.empty() &&
+            l[0].find("exception in the mod's own code, first reported (before any handler, which may yet take it): "
+                      "ACCESS_VIOLATION (0xC0000005) at " + here) == 0 &&
+            logged("reading address 00000010") &&
+            !logged("(handled!)"),
+        "first report, a fault in this program's code: its kind, where, what it touched - and not handled");
+  void* elsewhere = reinterpret_cast<void*>(&GetTickCount);  // kernel32's
+  l = first_chance(EXCEPTION_ACCESS_VIOLATION, elsewhere, called_from_here);
+  check(!l.empty() && l[0].find("exception in a call the mod made, first reported") == 0 &&
+            l[0].find("at kernel32.dll+0x") != std::string::npos && !logged("(handled!)"),
+        "... in another module, this program's return address near the stack's top: a call the mod made");
+  l = first_chance(EXCEPTION_ACCESS_VIOLATION, elsewhere, nothing);
+  check(l.empty(), "... in another module, nothing of this program's near the stack's top: not logged");
+  bool quiet = true;
+  for (DWORD code : {0x80000003UL, 0x40010006UL, 0x406D1388UL, 0xE06D7363UL, 0x80000004UL})
+    quiet = quiet && first_chance(code, reinterpret_cast<void*>(&touch_me), nothing).empty();
+  check(quiet, "... a breakpoint, a debugger's message, a thread's name, a C++ throw, a single step: not logged");
+  CONTEXT fctx{};
+  fctx.ContextFlags = CONTEXT_FLOATING_POINT;
+  fctx.FloatSave.ControlWord = 0x025F;
+  fctx.FloatSave.StatusWord = 0x80A0;
+  fctx.FloatSave.TagWord = 0x3FFF;
+  l = first_chance(EXCEPTION_FLT_INEXACT_RESULT, reinterpret_cast<void*>(&touch_me), nothing, &fctx);
+  check(!l.empty() && l[0].find("FLT_INEXACT_RESULT (0xC000008F)") != std::string::npos &&
+            logged("x87 control word 025F, status 80A0, tags 3FFF - unmasked: inexact; an exception pending; 1 "
+                   "register(s) in use"),
+        "... a floating-point fault: named, with its x87 state");
+  l = first_chance(EXCEPTION_INT_DIVIDE_BY_ZERO, reinterpret_cast<void*>(&touch_me), nothing);
+  const bool fourth = !l.empty();
+  l = first_chance(EXCEPTION_INT_DIVIDE_BY_ZERO, reinterpret_cast<void*>(&touch_me), nothing);
+  check(fourth && l.empty(), "... four a run, no more");
+
+  // Where another thread is.
+  g_park = CreateEventA(nullptr, TRUE, FALSE, nullptr);
+  DWORD tid = 0;
+  HANDLE t = CreateThread(nullptr, 0, parked, nullptr, 0, &tid);
+  Sleep(200);
+  char at[700];
+  const bool seen = where_is(tid, at, sizeof(at));
+  const std::string s = at;
+  if (g_verbose) std::printf("      where_is: %s\n", at);
+  char thread_no[32];
+  std::snprintf(thread_no, sizeof(thread_no), "(thread %lu); up its stack:", tid);
+  check(seen && s.find("is at ") == 0 && s.find(thread_no) != std::string::npos &&
+            s.find("test_crash.exe+0x") != std::string::npos,
+        "where_is: a parked thread's place, and its stack's code addresses up to this program's");
+  SetEvent(g_park);
+  WaitForSingleObject(t, 5000);
+  CloseHandle(t);
+  check(!where_is(GetCurrentThreadId(), at, sizeof(at)), "... not this thread's own");
+  check(!where_is(0xFFFFFFF0, at, sizeof(at)) && std::string(at).find("could not be looked at") == 0,
+        "... nor one that is not there (and says so)");
+
+  // A filter that replaced ours.
+  g_lines.clear();
+  SetUnhandledExceptionFilter(&other_filter);
+  reassert_crash_filter();
+  LPTOP_LEVEL_EXCEPTION_FILTER now = SetUnhandledExceptionFilter(nullptr);
+  check(logged("the top-level filter had been replaced (") &&
+            logged((", " + where(reinterpret_cast<void*>(&other_filter)) + ") - ours is back on top, chaining to it").c_str()) &&
+            now == &on_exception && g_previous == &other_filter,
+        "a filter that replaced ours: named by its module, ours back on top, chained to it");
 
   std::printf(g_fail ? "%d FAILED\n" : "all passed (0 failed)\n", g_fail);
   return g_fail ? 1 : 0;

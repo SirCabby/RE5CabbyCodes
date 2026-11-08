@@ -7,7 +7,8 @@
 // renderer's start-up, with the image unpacked and the import table filled:
 // unpacked() runs there, once, before the real call - the import hooks (the
 // crash filter, the input guard), the class records, the game's discovery and
-// the tick's hook.
+// the tick's hook - on the x87/SSE state fpu::Guard sets, the game's put back
+// after it.
 namespace re5cc::boot {
 
 // From DllMain: the exe's own GetProcAddress import - the one Enigma's loader

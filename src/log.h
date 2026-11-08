@@ -11,4 +11,8 @@ void log_shutdown();
 
 void logf(const char* fmt, ...);
 
+// The same line, for a thread that must not wait on another's: once the log's lock
+// has been held elsewhere for `wait_ms`, the line is written without it (and says so).
+void logf_nowait(unsigned long wait_ms, const char* fmt, ...);
+
 }  // namespace re5cc

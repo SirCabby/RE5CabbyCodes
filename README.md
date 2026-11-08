@@ -187,6 +187,11 @@ The mod says why - in a message box as the game starts, or in the panel. Otherwi
 **RE5CabbyCodes.prev.log** from the game's folder. When the game closes by itself, the log's last lines say how: the
 game's own error message (a line starting `FATAL`), or where it crashed.
 
+On Windows, if the game closes and the log's last lines say nothing of it, Windows keeps its own record: in the Event
+Viewer, Windows Logs > Application, an "Application Error" for re5dx9.exe. Send its "Faulting module name",
+"Exception code" and "Fault offset" with the logs, and say which overlays (Steam's, Discord's, MSI Afterburner's or
+RivaTuner's...) and security programs are running.
+
 - **A black screen at the start, then a crash, on Linux under gamescope with `--force-windows-fullscreen`**: the
   game's fullscreen at a resolution other than gamescope's keeps resetting the display, with or without the mod.
   Give the game gamescope's resolution (its `-w` x `-h`), fullscreen or windowed: in the game's `config.ini` (in its

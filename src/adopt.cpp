@@ -1,4 +1,4 @@
-// Private vtables for the D3D9 device bio4.exe makes for its window and for its
+// Private vtables for the D3D9 device re5dx9.exe makes for its window and for its
 // swap chains.
 //
 // Putting the mod's functions into D3D9's class vtables (the device's Present,
@@ -40,8 +40,11 @@ namespace {
 
 constexpr int kMaxHooks = 8;
 constexpr int kMaxObjects = 64;
-// The class bio4.exe registers for its window (GXInit, src\\Hap\\XBOX360\\gx.cpp).
-constexpr char kGameWindowClass[] = "RE4HDWnd";
+// The class re5dx9.exe registers for its window (RegisterClassExW, "MTFramework":
+// every log's "overlay ready" line names it). Until 2026-11-05 this held RE4OG's
+// "RE4HDWnd", copied with the file: no window matched, so on Windows - where the
+// device is adopted - the game's device was left alone and the panel never drew.
+constexpr char kGameWindowClass[] = "MTFramework";
 
 struct Entry {
   void* obj = nullptr;       // stale once the game frees it
@@ -120,9 +123,8 @@ void init() {
 
 bool enabled() { return g_enabled; }
 
-// bio4.exe makes its window on its render thread (GXInit, run there as a queued
-// render command), not on the thread that loaded the mod, so the window is known
-// by the class the game registers for it.
+// The game's window is known by the class the game registers for it (a device
+// another program or tool makes for a window of its own is left alone).
 bool game_window(HWND w) {
   DWORD pid = 0;
   if (!w || !GetWindowThreadProcessId(w, &pid) || pid != GetCurrentProcessId()) return false;

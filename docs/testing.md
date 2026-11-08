@@ -148,8 +148,36 @@ report: left at step 1 after 16 s) 11, no pace 8, the Pushes taken from AUTO 6).
 the mod's own -O2) over a made-up fatal error that formats its text into 1 KB on its stack, as the game's does: only
 FatalAppExitA and ExitProcess taken, never without the real one; the fatal error's text logged (its newline dropped)
 with the code it came through - past the text, up to the function that failed - then the real FatalAppExitA with the
-game's arguments; ExitProcess(0) one line, any other code with where it came from; an exception logged as before -
-13 checks, all passing on 2026-10-30. `tests/test_menus.cpp` builds `menus.cpp` over a made-up game (sBioMain and its
+game's arguments; ExitProcess(0) one line, any other code with where it came from; an exception logged as before, a
+floating-point one with its x87 words; as Windows first reports an exception (the vectored handler, 2026-11-05): a
+fault in the program's own code logged with its kind, place and what it touched, one in kernel32 with the program's
+return address near the stack's top logged as a call the mod made, one with nothing of the program's there not, nor
+a breakpoint, a debugger's message, a thread's name, a C++ throw or a single step; a floating-point fault with its x87
+words; four a run; nothing handled; `where_is` on a thread of the program's parked in a wait (its place, its stack's
+code addresses down to the program's own frame), not on the calling thread, nor on one that is not there; a filter
+that replaced the mod's named by its module, the mod's back on top and chained to it - 24 checks, all passing on
+2026-11-05 (six broken builds, each caught: no look up the stack 2, every code logged 2, no cap 1, another module's
+logged anyway 2, the replacing filter's module not named 1, no x87 words 2). `tests/test_fpu.cpp` (2026-11-05)
+builds `src/log.cpp` with `src/fpu.h` (the mod's own -O2; `-Wl,--wrap=fopen` stands in for a hook in the system's
+file calls). Nine x87/SSE states, each in a child process: the boulder's line (`flds` of 0.75f, `fstpl`, "%.2f") on
+the bare unit faults in the six that claim to (the inexact result unmasked, every exception unmasked, the stack full
+or MMX left on with the invalid operation unmasked, a zero divide pending, 7 registers in use under Delphi's word)
+and runs in the three that do not (027F, Delphi's 1232, Delphi's SSE 1900); under the guard it runs in all nine, on
+027F with the stack empty, no flag and SSE 1F80, the guard having read the state as it was and put it back exactly
+(the control word, the status - flags, ES, TOP -, which registers are in use, the SSE word); logf, on each of the six
+states its call can be made on, writes the line with 0.75 and leaves the caller's unit as it was. In the test itself:
+`fpu::env()` reads a pending exception without raising it and leaves it pending; `describe`, `usual` and `as_set`;
+a file call that leaves the inexact result unmasked and a register in use: logf says so once (what it changed to),
+writes both lines (the float formatted before the file was opened) and puts the caller's unit back; `logf_nowait`
+with another thread holding the log's lock writes after its 100 ms, saying whose, and with the lock free a plain
+line; a 3 KB line whole - 69 checks, all passing on 2026-11-05 (nine broken builds: logf without the guard fails 10,
+no FNINIT over registers in use 5, only the control word put back 16, no FNCLEX before the control word 1, the SSE
+word left alone 1, a file call before the format crashes the test, nothing put back 16, the change never said 1; an
+`env()` without its FNCLEX passes on this CPU - masking every exception already drops the pending one).
+`tests/test_adopt.cpp` (2026-11-05) builds `adopt.cpp` with RE5CC_ADOPT set (the Windows path) over message-only
+windows: one of the game's class, `MTFramework`, is the game's; one of RE4's class (`RE4HDWnd`, which the file held until
+that day, so no device was adopted on Windows and the panel never drew there), one of a tool's and none are not - 6
+checks, all passing (the old class name fails 2). `tests/test_menus.cpp` builds `menus.cpp` over a made-up game (sBioMain and its
 cGameSys, sArea with the play flow and later the menus' aDemo - its start, its load by sLoadMan's field - and its
 cDemoStartUp, Item Management's screen and a
 stand-in for its save, cGameInfo's working block and its checkpoint copy, cSystemInfo and its copy at the real

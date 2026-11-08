@@ -54,8 +54,17 @@ wrapper's import table by value, `mem::iat_slot`) at `boot.cpp`'s hook; when the
   let go and refused; the keyboard reads "nothing" while a panel field has focus (but Esc and Alt). The pad
   (XInput) is the game's own and is left alone.
 
-## Windows (audited by design; never run there)
+## Windows (audited by design; one user's run so far)
 
+- **The first run on Windows** (a user's log, 2026-11-05: `C:\WINDOWS\system32\d3d9.dll`, pid 4052): Enigma on Windows
+  does resolve the game's imports through LdrGetProcedureAddress ("boot: the game's Direct3DCreate9 resolved through
+  LdrGetProcedureAddress (from C:\WINDOWS\system32\d3d9.dll) - it gets the mod's") - the one thing the mod rested on.
+  The image, the class records and every discovery line up to Automatic QTEs's matched the user's own Proton run
+  value for value, about 3-4x slower (1.5-2 ms a log line: a real-time scan of each write, most likely). Then the
+  log stops: no boulder line, no CRASH line, no "5 s after start" line, no "process exiting", no ExitProcess. The
+  boulder's line is where the boot runs its first x87 instruction (`flds` of 0.75f, `fstpl`, then "%.2f": nothing
+  before it in the boot touches the x87). See "The x87 and SSE units" for what that can and cannot mean, and what the
+  next build logs instead.
 - **DLL search order**: d3d9.dll is not a known DLL, so the game folder's comes first. A d3d9.dll of another mod
   must be renamed d3d9_orig.dll (README); `make install` does it.
 - **The Steam overlay's D3D9 hooks**: as RE4OG - on Windows the game's IDirect3D9, device and swap chains get
@@ -63,9 +72,48 @@ wrapper's import table by value, `mem::iat_slot`) at `boot.cpp`'s hook; when the
 - **The overlay's DirectInput wrappers**: the guard hooks each device class it meets (`input.cpp`).
 - **Exit**: DllMain does nothing on a process exit; the DLL pins itself.
 - **ASLR**: re5dx9.exe has relocations stripped (fixed 0x400000), but nothing in the mod depends on it.
-- **Open**: never run on Windows. Whether Enigma on Windows also resolves the game's imports through
-  LdrGetProcedureAddress is the one thing the whole mod rests on (it is the same wrapper code, run by the same
-  exe); the log says "the game's Direct3DCreate9 resolved through LdrGetProcedureAddress" when it does.
+- **The exe's exception handling**: no SafeSEH table and no load config, DllCharacteristics 0 (no NX, no ASLR), so
+  Windows takes every SEH handler in it as valid. A fault in the boot reaches the CRT's `__except(_XcptFilter)`,
+  then UnhandledExceptionFilter and the mod's filter - unless something has replaced that filter since the CRT set
+  it (it is reasserted as the boot starts now, the replacer named) or a handler ends the program first. The
+  first-chance report ("The game's own ends") is logged before any of that.
+- **Open**: what ended the first Windows run. If the next log ends the same way with none of the new lines, the
+  process was ended from outside the mod's sight (a `__fastfail`, a TerminateProcess - a security program, say):
+  ask for Windows' own record of it (Event Viewer > Windows Logs > Application, an "Application Error" for
+  re5dx9.exe: faulting module, exception code, offset) and what overlays and security programs run.
+
+## The x87 and SSE units (`fpu.h`) - 2026-11-05
+
+- **The mod is x87 code**: mingw's i686 default (`-march=pentiumpro -mfpmath=387`), so its own floats, ImGui's, and
+  mingw's printf (`%f` through gdtoa) all use the x87 register stack. It runs on the game's threads, and the game
+  creates its device with D3DCREATE_FPU_PRESERVE (flags 0x56), so D3D9 never resets their units. The game's C
+  runtime sets only the precision (53-bit: `_setdefaultprecision`, the one caller of its `_controlfp_s`, the one
+  caller of `_control87`). The game itself uses both units (82,000 `fld`, 314,000 `movss`).
+- **What faults the boot's first float** (the boulder's line: `flds` of 0.75f, `fstpl`, "%.2f"; measured under Wine,
+  `tests/test_fpu.cpp`):
+  - the inexact result unmasked (025F): FLT_INEXACT_RESULT inside the formatting;
+  - an exception pending: at the `flds`;
+  - the invalid operation unmasked with the stack full or MMX left on (no EMMS): FLT_STACK_CHECK at the `fstpl`; with
+    7 registers in use, inside the formatting.
+  - Not: Delphi's control word (1232/1332: invalid, zero divide, overflow unmasked), 24-bit precision, any rounding,
+    underflow or denormal unmasked, an SSE word with exceptions unmasked (Delphi's 1900).
+- **The first Windows run fits it only in part**: each of those states would fault the game's own x87 code first,
+  unless it was made after the game's last float. Between the game's Direct3DCreate9 call and the boulder's line,
+  the only code on that thread that is not the mod's is the system calls the boot makes - its log's ~40 file opens
+  and closes above all, where a hook (Enigma's virtual box hooks the file calls to serve steam_api.dll; a security
+  program may) could leave one. Under Wine every such fault reached the unhandled-exception filter, so the FPU alone
+  does not explain the silence either. Not proven.
+- **fpu::Guard**: FNSTENV (no wait; it masks every exception), FNCLEX, FNINIT if any register is in use, FLDCW 027F,
+  MXCSR 1F80; at the end FNCLEX, FLDENV of what it found, its MXCSR back - the thread's state exactly as found, a
+  pending exception and all. Used by the boot (inside the game's first Direct3DCreate9), each log line (formatted
+  before the file is opened, the caller's state put back after the file calls), the tick (not the game's frame after
+  it) and every ImGui use (`ImGuiLock`: the present, the window procedure, Reset). The game hooks (damage, the hit
+  checks, the QTE check) run inside the game's own state, as before.
+- **The log**: "boot: the game's thread brings x87 control word 027F, status 0000, tags FFFF; SSE 1F80 - nothing in
+  it that would fault a float" (else what is in it: "- unmasked: inexact; an exception pending; 3 register(s) in
+  use; SSE unmasked: ..."); once a run "log: the thread's x87/SSE unit changed across a write of this log (to ...)"
+  when a file call changed it; "boot: the thread's x87/SSE unit changed during the boot (to ...)" when another
+  system call of the boot's did.
 
 ## MT Framework's class records (`mt.cpp`)
 
@@ -209,3 +257,13 @@ The user (2026-10-30): "the game just crashed trying to go through a door in cha
   up to ten return addresses into the game's code (2048 slots up: past the text), or "the game ends:
   ExitProcess(n)" (a quit's 0 alone, any other code with where it came from), then calls the real one. Built, tested
   offline (`tests/test_crash.cpp`) and installed.
+- **First reports** (2026-11-05, after the first Windows run ended without a line): a vectored handler logs an
+  error-class exception in the mod's code, or in a call it made (its return address among the stack's first 16
+  slots), as Windows first reports it - before the game's or the protector's handlers, whether or not the top-level
+  filter is still the mod's: "exception in the mod's own code, first reported (before any handler, which may yet
+  take it): FLT_STACK_CHECK (0xC0000092) at d3d9.dll+0x..." with the registers, a floating-point exception's x87 words
+  and the stack. Four a run, nothing handled; a breakpoint, a debugger's message, a thread's name or a C++ throw is
+  not logged. The CRASH lines name the floating-point exceptions and log their x87 words too. The "N s after start:
+  no tick yet" line says where the main thread is (held a moment: its instruction and the first code addresses up
+  its stack) and is written without the log's lock once another thread has held it 2 s. A reasserted filter's line
+  names the module that had replaced the mod's.

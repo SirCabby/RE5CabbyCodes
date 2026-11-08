@@ -3,6 +3,7 @@
 #include "cheats.h"
 #include "config.h"
 #include "crash.h"
+#include "fpu.h"
 #include "image.h"
 #include "input.h"
 #include "inventory.h"
@@ -34,7 +35,10 @@ DWORD g_last_rates = 0;
 bool g_in_game_prev = false;
 game::Screen g_screen_prev = game::Screen::kNone;
 
+// The mod's frame, before the game's: its own floats on the unit fpu::Guard sets, the
+// game's state put back before the game's frame runs.
 void tick(void* main) {
+  fpu::Guard fpu;
   const DWORD now = GetTickCount();
   if (!g_first_tick) {
     InterlockedExchange(&g_first_tick, 1);

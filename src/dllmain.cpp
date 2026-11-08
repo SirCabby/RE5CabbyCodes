@@ -76,15 +76,22 @@ BOOL CALLBACK list_window(HWND hwnd, LPARAM lp) {
   return TRUE;
 }
 
-// Until the first tick, say every 5 s what is on screen: a game that never
-// reaches its frame loop is never a log that just stops.
+DWORD g_main_thread = 0;  // DllMain's: the exe's own imports load on its primary thread
+
+// Until the first tick, say every 5 s what is on screen and where the game's main
+// thread is: a game that never reaches its frame loop is never a log that just stops.
+// The line does not wait on the log's lock for long - a thread stuck while it holds
+// it would keep this one from saying so.
 DWORD WINAPI mod_thread(LPVOID) {
   using namespace re5cc;
   HANDLE ev = dispatch::first_tick_event();
   for (int s = 5; ev && s <= 120 && WaitForSingleObject(ev, 5000) == WAIT_TIMEOUT; s += 5) {
     WindowList w{};
     EnumWindows(list_window, reinterpret_cast<LPARAM>(&w));
-    logf("%d s after start: no tick yet; windows: %s", s, w.len ? w.text : "none");
+    char where[700];
+    where_is(g_main_thread, where, sizeof(where));
+    logf_nowait(2000, "%d s after start: no tick yet; windows: %s; the main thread %s", s, w.len ? w.text : "none",
+                where);
   }
   return 0;
 }
@@ -96,6 +103,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
   switch (reason) {
     case DLL_PROCESS_ATTACH: {
       g_self = module;
+      g_main_thread = GetCurrentThreadId();
       DisableThreadLibraryCalls(module);
       resolve_own_dir();
       log_init(g_dir);

@@ -10,6 +10,7 @@
 #include "config.h"
 #include "crash.h"
 #include "dispatch.h"
+#include "fpu.h"
 #include "game.h"
 #include "image.h"
 #include "input.h"
@@ -135,7 +136,9 @@ void remove_loader_hook() {
     mem::write<uintptr_t>(g_gpa_slot, reinterpret_cast<uintptr_t>(g_orig_gpa));
 }
 
-void unpacked() {
+namespace {
+
+void start() {
   image::init();
   if (const char* problem = image::layout_problem()) {
     std::snprintf(g_status, sizeof(g_status), "%s - not the Steam version the mod was made for (build 11465250)", problem);
@@ -181,6 +184,35 @@ void unpacked() {
   if (config::get().dump_image) image::dump(config::dir());
   if (game::ready()) std::snprintf(g_status, sizeof(g_status), "ready");
   InterlockedExchange(&g_done, 1);
+}
+
+}  // namespace
+
+// The game's main thread, in its first Direct3DCreate9: the boot runs on it, with the
+// x87 and SSE units as the game's code and whatever ran before left them. Its own floats
+// (and the C runtime's formatting of them) want every exception masked, none pending and
+// an empty register stack: the guard sets that, and puts the game's own back after the
+// boot (the game creates its device with D3DCREATE_FPU_PRESERVE, so nothing else does).
+// A user's first run on Windows (2026-11-05) ended without a word at the boot's first float.
+void unpacked() {
+  fpu::Guard guard;
+  char state[256];
+  fpu::describe(guard.found(), guard.found_mxcsr(), state, sizeof(state));
+  const bool usual = fpu::usual(guard.found(), guard.found_mxcsr());
+  logf("boot: the game's thread brings %s%s", state,
+       usual ? " - nothing in it that would fault a float"
+             : " (the mod's own code runs with every exception masked and the stack empty, and the game's state is "
+               "put back after)");
+  reassert_crash_filter();
+  start();
+  const fpu::Env e = fpu::env();
+  const uint32_t m = fpu::mxcsr();
+  if (!fpu::as_set(e, m)) {
+    fpu::describe(e, m, state, sizeof(state));
+    logf("boot: the thread's x87/SSE unit changed during the boot (to %s): a system call the boot made (a hook in "
+         "it) - the game's own state is put back all the same",
+         state);
+  }
 }
 
 bool done() { return g_done != 0; }

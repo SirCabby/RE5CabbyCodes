@@ -96,9 +96,11 @@ broken builds each caught) is in `docs/testing.md`.
 | `tests/test_panel.cpp` | the real panel (`overlay.cpp` built in), headless, with ImGui's test-engine hooks | the cheats and their editors, the Mercenaries' section, the results, the cases, the box's tabs and ticks, Take, Store (greyed for what no list offers, a launcher by its load), Add (the story's items only, the Gatling gun and Longbow for their owner), Max all, Treasures, the extra episodes' boxes, the Item Management window, and Chapter Select in each place | 133, all passing 2026-11-04 |
 | `tests/test_loader.cpp` | `inventory.cpp` and `itembox.cpp`, over sLoadMan at the real offsets, a case and the box | what is loaded, the request and commit, waiting Adds and Takes, preloads and their cap, the one-character weapons and what no list offers refused (a Store too), the treasures in every list, the pause's moves in every saved copy of the case (a grenade launcher stored as its load), the list the loader is asked into, and the extra episodes' boxes (their own, their files, the copies an episode restarts from) | 90, all passing 2026-11-03 |
 | `tests/test_cheats.cpp` | `cheats.cpp`'s tick and hooks, over made-up characters, areas, prompts and enemies | Steady aim's hold through a scope, the stages' countdowns, Automatic QTEs (cranks and the volcano's boulder at 60, 144 and 20 fps), One hit kills on a Reaper and on Uroboros Aheri, and Open map at chapter start (the extra episodes' starts too) | 125, all passing 2026-11-04 |
-| `tests/test_crash.cpp` | `crash.cpp` (the mod's -O2), over a made-up fatal error | the game's own ends logged, then passed on | 13, all passing 2026-11-03 |
+| `tests/test_crash.cpp` | `crash.cpp` (the mod's -O2), over a made-up fatal error | the game's own ends logged, then passed on; the first report of a fault in the mod's code (before any handler); another thread's place (`where_is`); a replacing filter named | 24, all passing 2026-11-05 |
+| `tests/test_fpu.cpp` | `log.cpp` with `fpu.h` (the mod's -O2; fopen wrapped as a hook in the file calls), each x87/SSE state in a child | the boot's first float on nine states, bare and guarded; the state put back exactly; logf on them; a file call changing the unit; `logf_nowait` past a held lock | 69, all passing 2026-11-05 |
 | `tests/test_merc.cpp` | `merc.cpp`, over a made-up play state, enemies with hit records, a gun in hand and a stage's area boxes, the game's scoring and clocks run as the dump has them | Endless combo, Combo Bonus always on, Kill enemies as they appear (the shot written as the shooter's hand-to-hand kill, who is hit - the chickens too -, its pace and its every-5-s retry, one match, a Chainsaw Majini's second life taken) and the areas widened and put back | 74, all passing 2026-11-03 |
 | `tests/test_discover.cpp` | the real `mt.cpp`, `merc.cpp` and `menus.cpp` discovery over the dump, copied to its own addresses (a linker script: see its header) | every signature's name unique, the class records, the Mercenaries' play state, hit record, hand-to-hand rule, stages' areas and the Chainsaw Majini's second life, the story's mode and menu fields Chapter Select goes by, and the game's mode for the item box, found as the game has them | 23, all passing 2026-11-03 |
+| `tests/test_adopt.cpp` | `adopt.cpp`, with RE5CC_ADOPT set (the Windows path), over message-only windows | the game's window known by its class, `MTFramework` (until 2026-11-05 RE4OG's `RE4HDWnd`: no device was adopted on Windows, no panel) - not RE4's, not a tool's, not none | 6, all passing 2026-11-05 |
 | `tests/test_menus.cpp` | `menus.cpp`, over sBioMain, sArea, aGame/aDemo, cDemoStartUp, Item Management, the pause menu, Game Over and the results | Chapter Select from each place (in a story game only), the front end's archive, the start-up menu's background, and the saved copies | 103, all passing 2026-11-03 |
 
 `test_panel` with `shots` writes a picture of each step. Each frame it runs the panel's own keep rule (`visible_now`)
@@ -187,21 +189,26 @@ discovery is proven by `tools/sig.py --check` over the dump and by a headless ru
   nothing while a field has focus (but Esc and Alt). The pad (XInput) is the game's own and is left alone.
 - **Screens** are `uId*` units. The pause is `uIdPause00`'s open byte (+0x3C): the unit itself lives all chapter.
   `uIdItemBox00` is Item Management, `uIdGameover00` the Game Over screen, `uIdChapEd00` the results.
-- **Windows** is audited by design and never run there. Whether Enigma resolves the game's imports through
-  `LdrGetProcedureAddress` there too is the one thing the mod rests on: the log says so when it does.
+- **Windows** is audited by design. One user's run (2026-11-05) showed Enigma resolves the game's imports through
+  `LdrGetProcedureAddress` there too (the one thing the mod rests on), then stopped without a line at the boot's
+  first float (`docs/engine.md` "Windows"). The device is adopted only for the game's window, known by its class
+  `MTFramework` - RE4OG's `RE4HDWnd` until 2026-11-05, which kept the panel off on Windows (`docs/history.md`).
+- **Floats**: the mod is x87 code on the game's threads (the device keeps FPU_PRESERVE): `fpu::Guard` runs the boot,
+  each log line, the tick and ImGui with every exception masked and the stack empty, and puts the thread's own back.
 
 ## Notes (`docs/`)
 
 **`docs/engine.md`**
 - Why d3d9.dll, and Enigma's loader.
 - Threads and the tick.
-- Windows.
+- Windows: the first run (a user's, 2026-11-05) and what is open about it.
+- The x87 and SSE units: what faults the mod's floats, the guard (`fpu.h`).
 - MT Framework's class records.
 - The systems and the units.
 - The characters: health, who drives a player (+0x2DA8), the damage slots, an enemy hit's path through
   FUN_009DEA50.
 - The mouse, and how the user's gamescope broke it.
-- The game's own ends: its fatal error and exits (`crash.cpp`).
+- The game's own ends: its fatal error and exits, and the first report of a fault in the mod's code (`crash.cpp`).
 
 **`docs/cheats.md`**
 - The cheats: each switch's patch or hook.
@@ -254,7 +261,7 @@ only being hit once each to kill them"). Its phases and its death stay the game'
 - The in-game checklist.
 - Next to build.
 
-## Status (2026-11-04)
+## Status (2026-11-05)
 
 Everything above is built, tested offline and installed.
 
@@ -291,7 +298,12 @@ Built since and not seen in play:
 
 What to look for in each is in `docs/history.md`, under "In-game checklist".
 
+Built since and not seen in a log: the x87/SSE guard and the first-report logging (2026-11-05, after a Windows user's
+first run ended without a line at the boot's first float).
+
 Open:
+- What ended that Windows run is not proven (the FPU fits only in part; the user's symptom is not known). Their next
+  log's last lines, or Windows' own record of the crash, should say (`docs/history.md`, 2026-11-05).
 - The cause of the 3-2 door crash (2026-10-30) is not proven. The mod's preloads into the cutscenes' list fit it, and
   that was fixed 2026-10-31.
 - The FATAL logger's return addresses land in the C runtime's formatting, so they have been useless both times.

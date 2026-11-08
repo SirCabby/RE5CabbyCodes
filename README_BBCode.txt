@@ -37,6 +37,8 @@ It is made for the current Steam version of the game (build 11465250). On anothe
 [size=5][b]If it does not work[/b][/size]
 
 The mod says why - in a message box as the game starts, or in the panel. Otherwise send [b]RE5CabbyCodes.log[/b] and [b]RE5CabbyCodes.prev.log[/b] from the game's folder. When the game closes by itself, the log's last lines say how: the game's own error message (a line starting FATAL), or where it crashed.
+
+On Windows, if the game closes and the log's last lines say nothing of it, Windows keeps its own record: in the Event Viewer, Windows Logs > Application, an "Application Error" for re5dx9.exe. Send its "Faulting module name", "Exception code" and "Fault offset" with the logs, and say which overlays (Steam's, Discord's, MSI Afterburner's or RivaTuner's...) and security programs are running.
 [list]
 [*][b]A black screen at the start, then a crash, on Linux under gamescope with --force-windows-fullscreen[/b]: the game's fullscreen at a resolution other than gamescope's keeps resetting the display, with or without the mod. Give the game gamescope's resolution (its -w x -h), fullscreen or windowed: in the game's config.ini (in its Proton prefix, under Documents/CAPCOM/RESIDENT EVIL 5/), e.g. Resolution=1920x1080 and, for windowed, FullScreen=OFF. The game ignores -windowed, -w and -h on its command line.
 [*][b]A console window reading "res = 1, err = 0x000000cb, ..."[/b] is the game's own launcher saying it started the game (res = 1). It is not an error.

@@ -480,8 +480,62 @@ game modes?"
   opened" follows an episode's or a chapter's start, the game cleared it between two areas, and the timing needs
   another look.
 
+2026-11-05, a user's report relayed by the user: "the mod was failing for them", with their log - the mod's first run on
+Windows (`C:\WINDOWS\system32\d3d9.dll`, pid 4052, a new ini with the defaults).
+- **Found**: Enigma on Windows resolves the game's imports through LdrGetProcedureAddress, as under Proton - the one
+  thing the mod rested on - and every line up to Automatic QTEs's matched the user's own run of that morning (the same
+  addresses, about 3-4x slower). Then, 1.9 s after the DLL loaded, the log stops: no boulder line, no CRASH line, no "5
+  s after start", no "process exiting", no ExitProcess. The boulder's line is where the boot runs its first x87
+  instruction and formats its first float. Under Wine that code faults only on a unit with the inexact result
+  unmasked, an exception pending, or the invalid operation unmasked with the stack (nearly) full - states that would
+  fault the game's own x87 code first, unless made during the boot by the system calls it makes (its log's file
+  calls above all: a hook in them). Under Wine each such fault reached the unhandled-exception filter; on Windows a
+  filter set since by another DLL, or a handler that ends the program, would leave no line. Not proven: what the
+  user saw (closed, frozen, a message) and whether the log they sent was whole are not known. Details: "Windows" and
+  "The x87 and SSE units" in docs/engine.md.
+- **Built** (no game call, no new signature, nothing the cheats do changed):
+  - `src/fpu.h`: a guard around the mod's own float code on the game's threads - the boot, each log line, the tick,
+    every ImGui use - with every exception masked and the stack empty, the thread's own state put back after, exactly;
+  - each log line formatted before its file is opened; a file call that changes the unit is said once;
+  - a first report of any fault in the mod's code (or in a call it made) as Windows raises it, before any handler;
+  - the crash filter reasserted as the boot starts (whoever replaced it named); the "N s after start: no tick yet"
+    lines with where the main thread is, never held up by the log's lock.
+- **Checks**: built (no warnings); `tests/test_fpu.cpp` 69 (new), `tests/test_crash.cpp` 24, every other test rebuilt
+  and rerun: cheats 125, loader 90, menus 103, merc 74, discover 23, panel 133. The built DLL, loaded under Wine
+  beside a stub `d3d9_orig.dll` with the inexact result unmasked: "boot: the game's thread brings x87 control word
+  025F, status 0000, tags FFFF; SSE 1F80 - unmasked: inexact (the mod's own code runs with every exception masked
+  and the stack empty, and the game's state is put back after)", the control word 025F again after the call, and at 5
+  s "5 s after start: no tick yet; windows: none; the main thread is at ntdll.dll+0xD5F0 (thread 316); up its stack:
+  kernelbase.dll+0x624E3, smoke.exe+0x8459, ...".
+- **Installed** at 12:29 (sha256 7b71703c..., cmp OK).
+- **The next log should have** (the user's, under Proton), after "crash logger installed (the game's own filter is
+  chained once it sets one; a fault in the mod's code is logged as it happens, before any handler)": "boot: the
+  game's thread brings x87 control word ..., status ..., tags FFFF; SSE ... - nothing in it that would fault a
+  float" - the state the game hands the mod, for comparison with a Windows log.
+- **Asked of the Windows user**: this build, then `RE5CabbyCodes.log` and `RE5CabbyCodes.prev.log` whatever happens,
+  and what they saw. If it stops again: the last lines say why ("exception in the mod's own code, first reported
+  ...", "log: the thread's x87/SSE unit changed ...", "crash: the top-level filter had been replaced (..., <module>)",
+  or "N s after start: no tick yet; ...; the main thread is at ..."). With none of those, the process was ended from
+  outside: Windows' own record (Event Viewer > Windows Logs > Application, "Application Error" for re5dx9.exe: the
+  faulting module, exception code and offset) and their overlays and security programs.
+
+2026-11-05 (later, found while building RE6CabbyCodes): **on Windows the panel could never draw.** `adopt.cpp`, copied
+from RE4OG, knew the game's window by RE4's class name, "RE4HDWnd"; re5dx9.exe's is "MTFramework" (every log's
+"overlay ready" line). Adoption - the device given vtables of its own - is the Windows path (the Steam overlay), and a
+device for a window that is not the game's is left alone: on Windows no device was ever hooked, so even a run that
+booted would have shown no panel (the log: "overlay: dx9: a device made by CreateDevice for window ... is not the
+game's (its window class is 'RE4HDWnd')"). Proton never takes that path, which is why play never showed it.
+- **Fixed**: the class is "MTFramework" (the user: "If you found a bug with RE5 for windows I want you to fix that as
+  well"). `tests/test_adopt.cpp` checks it (6 checks; 2 of them fail on the old code).
+- **Installed** at 13:52 (cmp OK). The v1.0.1 zip in `dist/` was made at 12:34, before this fix.
+- **The next Windows log should have**: "dx9: device ... created on thread ... adopted - a vtable of its own with
+  Present/..." instead of the "is not the game's" line.
+
 ## In-game checklist (not seen in play yet)
 
+- a run on Windows (2026-11-05): the boot past the boulder's line ("cheats: the volcano's boulder: ..."), then the
+  tick, the panel at the pause, the device's adoption (`adopt.cpp`, never run on Windows yet: "dx9: the game called
+  Direct3DCreate9 ...: IDirect3D9 ... adopted"), the mouse and keys;
 
 - the Mercenaries (2026-11-02), offline, The Mercenaries and Reunion: the panel's "The Mercenaries" section only in a
   match (its score, combo, kills of 150, time left beside the switches), none in a story chapter. Endless combo: kills

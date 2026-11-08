@@ -3,7 +3,7 @@
 #include <windows.h>
 
 // Private vtables for the renderer objects the panel hooks (the D3D9 device
-// bio4.exe makes for its window, and its swap chains), so that no
+// re5dx9.exe makes for its window, and its swap chains), so that no
 // function of the mod's sits in a vtable another hooker reads. Windows only:
 // under Wine the class vtables are hooked as before. See adopt.cpp for why.
 namespace re5cc::adopt {
@@ -14,7 +14,7 @@ void init();
 // True on Windows (or with RE5CC_ADOPT set in the environment, for the test).
 bool enabled();
 
-// A window of this process with the class bio4.exe registers for its own.
+// A window of this process with the class re5dx9.exe registers for its own ("MTFramework").
 bool game_window(HWND w);
 
 // "window 00100760 (class 'X', thread 1234)" for log lines.

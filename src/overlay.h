@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include "fpu.h"
+
 // The Dear ImGui panel and the machinery that gets it on screen. The game's
 // Direct3DCreate9 is the mod's own (it is d3d9.dll), so the renderer is
 // captured from the first call; the device's presents come from the game's
@@ -23,7 +25,8 @@ void shutdown_imgui();            // Win32 backend + context (renderer already g
 // One ImGui context; the window procedure feeds it messages and the present
 // hook draws from it. Every touch of the context is taken under this lock
 // (RE0 learned it the hard way: a frame freed the event queue under a
-// WM_MOUSEMOVE that was reading it).
+// WM_MOUSEMOVE that was reading it) - and on the x87/SSE state fpu::Guard sets
+// (ImGui is float code on the game's threads), theirs put back after.
 void lock_imgui();
 void unlock_imgui();
 struct ImGuiLock {
@@ -31,6 +34,9 @@ struct ImGuiLock {
   ~ImGuiLock() { unlock_imgui(); }
   ImGuiLock(const ImGuiLock&) = delete;
   ImGuiLock& operator=(const ImGuiLock&) = delete;
+
+ private:
+  fpu::Guard fpu_;  // set before the lock is taken, put back after it is let go
 };
 
 // What the panel is using this frame, for the input guard (input.cpp).
