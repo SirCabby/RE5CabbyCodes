@@ -80,7 +80,9 @@ wrapper's import table by value, `mem::iat_slot`) at `boot.cpp`'s hook; when the
 - **Open**: what ended the first Windows run. If the next log ends the same way with none of the new lines, the
   process was ended from outside the mod's sight (a `__fastfail`, a TerminateProcess - a security program, say):
   ask for Windows' own record of it (Event Viewer > Windows Logs > Application, an "Application Error" for
-  re5dx9.exe: faulting module, exception code, offset) and what overlays and security programs run.
+  re5dx9.exe: faulting module, exception code, offset) and what overlays and security programs run. One more way to
+  end with no CRASH line (2026-11-10): another crash handler keeping SetUnhandledExceptionFilter's slot for itself -
+  the log says so since ("has been made to do nothing", "The game's own ends", the chain).
 
 ## The x87 and SSE units (`fpu.h`) - 2026-11-05
 
@@ -267,3 +269,26 @@ The user (2026-10-30): "the game just crashed trying to go through a door in cha
   no tick yet" line says where the main thread is (held a moment: its instruction and the first code addresses up
   its stack) and is written without the log's lock once another thread has held it 2 s. A reasserted filter's line
   names the module that had replaced the mod's.
+- **The chain** (2026-11-10, found reading a crash report of RE4OGCabbyCodes', whose filter, chaining and reassert
+  this one shares). Two bugs:
+  - SetUnhandledExceptionFilter made to do nothing - a crash handler that keeps the slot for itself writes `ret 4`
+    over its first bytes after setting its own (re4_tweaks' does, for RE4, with a CrashDumps folder beside the exe).
+    A call then "returns" whatever eax held: each reassert took that (the tick's milliseconds since the last one,
+    0x3E8..) for the previous filter, chained to it and logged "had been replaced (000003e8, 000003e8 (no module)) -
+    ours is back on top, chaining to it" every second. Now the API's first instruction is read (past the jumps in
+    front: kernel32 into kernelbase, a hook's): a `ret`, or `xor eax,eax` and one, is said once - "crash:
+    SetUnhandledExceptionFilter has been made to do nothing (a ret at ...)" - and the mod stands aside: no reassert,
+    install says "installed without its top-level filter", the game's call through the hook "did not go in". That
+    handler reports a crash; this log has no CRASH line then (the first reports still come). A "previous filter" that
+    is no executable code is never chained to.
+  - A filter set over the mod's that chains to the one it replaced - the mod's - which the reassert then chains to:
+    a crash went round the two until the stack ran out (`tests/test_crash.cpp` against the build before: 6311 dumps,
+    then the test's 120 s limit). Now each thread in the filter keeps the exceptions it is passing on (three deep):
+    the same one handed back is stopped with one line ("back in our filter with the same exception ... not passed on
+    again"); a new one, raised while the filter passed to runs (a packer's handler may raise one on purpose), is
+    logged ("another exception, raised while ...") and passed on as any other, but not past three deep.
+  - Also: the same exception given to the filter again is a line, not a second dump; each dump names the filter it
+    is passed on to ("passed on to the filter at <module+0x..>") and has every register (ebx, esi, edi too) and the
+    stack's top 0xC0 bytes raw (the faulting function's frame) - the first reports too; a filter that keeps putting
+    itself back over the mod's is logged once. Run offline (`tests/test_crash.cpp`, 48 checks); not seen at a real
+    crash.

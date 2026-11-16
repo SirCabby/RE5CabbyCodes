@@ -23,7 +23,9 @@ void* crash_exit_hook(const char* name, void* real);
 
 // Main thread, about once a second (and as the boot starts): put our filter back on
 // top if something replaced it without going through the game's import - the log
-// names the module that had.
+// names the module that had (once, however often it puts itself back), and ours
+// chains to it only if it is code. Nothing when SetUnhandledExceptionFilter has
+// been made to do nothing (another crash handler keeping the slot): said once.
 void reassert_crash_filter();
 
 // Where another thread is, for the log: "is at module+0xRVA (thread N); up its stack:

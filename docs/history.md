@@ -531,6 +531,24 @@ game's (its window class is 'RE4HDWnd')"). Proton never takes that path, which i
 - **The next Windows log should have**: "dx9: device ... created on thread ... adopted - a vtable of its own with
   Present/..." instead of the "is not the game's" line.
 
+2026-11-10, found reading a crash report of RE4OGCabbyCodes' (one crash logged three times; its filter, chaining and
+reassert are this mod's): **two bugs in the crash filter's chain**, fixed here too at the user's word ("did you fix the
+bugs you found yet? if not do so").
+- **Found**: (1) with SetUnhandledExceptionFilter made to do nothing (`ret 4` over its first bytes - a crash handler
+  keeping the slot for itself), each reassert took the leftover eax for the previous filter, chained to it and logged
+  "ours is back on top" every second; (2) a filter set over the mod's that chains to the one it replaced (the mod's),
+  once the reassert chains to it, made a crash go round the two until the stack ran out. Details: `docs/engine.md`
+  "The game's own ends", the chain.
+- **Built**: `src/crash.cpp` - the inert API said once and stood aside from; nothing that is not code chained to; per
+  thread, the exceptions being passed on: the same one handed back stopped with a line, a new one raised inside passed
+  on, three deep at most; the same exception again a line, not a dump; each dump with every register, the stack's top
+  raw and the filter it is passed on to; a replacing filter logged once. The vectored first reports are unchanged but
+  for the fuller registers and the raw stack (they pass nothing on, so they cannot go round).
+- **Checks**: built (no warnings); `tests/test_crash.cpp` 48 (24 new); the build before fails them (6311 dumps round
+  the chain-back until the 120 s limit; a line a second beside the `ret 4`); every other test rebuilt and rerun: fpu
+  69, adopt 6, cheats 125, loader 90, menus 103, merc 74, panel 133, discover 23.
+- **Installed** 2026-11-10 (cmp OK).
+
 ## In-game checklist (not seen in play yet)
 
 - a run on Windows (2026-11-05): the boot past the boulder's line ("cheats: the volcano's boulder: ..."), then the

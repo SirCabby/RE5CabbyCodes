@@ -157,7 +157,18 @@ words; four a run; nothing handled; `where_is` on a thread of the program's park
 code addresses down to the program's own frame), not on the calling thread, nor on one that is not there; a filter
 that replaced the mod's named by its module, the mod's back on top and chained to it - 24 checks, all passing on
 2026-11-05 (six broken builds, each caught: no look up the stack 2, every code logged 2, no cap 1, another module's
-logged anyway 2, the replacing filter's module not named 1, no x87 words 2). `tests/test_fpu.cpp` (2026-11-05)
+logged anyway 2, the replacing filter's module not named 1, no x87 words 2). The chain (2026-11-10, `docs/engine.md`
+"The game's own ends"), the filter called as UnhandledExceptionFilter calls the top-level one with a made-up access
+violation: installed and the game's filter set through the hook, the mod's on top; a crash one dump with every
+register and the stack's top raw, passed on to the filter named; the same exception again a line; a filter set over
+the mod's that chains back - the reassert chaining to it - stopped as it hands the same exception back; a "previous
+filter" that is no code not chained to; two threads each with their own dump; a new exception raised inside the
+filter passed to, passed on too, and one raised every time stopped three deep; SetUnhandledExceptionFilter made to do
+nothing (`ret 4` over its first bytes): said once, nothing taken for a filter, no line each second, neither the
+game's call nor install claimed to put the mod's on top - 48 checks, all passing on 2026-11-10. The build before,
+under the same checks, went round the chain-back 6311 times until the test's 120 s limit, and (a scratch program
+beside the same `ret 4`) logged "had been replaced (000003e8, ...) - ours is back on top, chaining to it" at every
+reassert. `tests/test_fpu.cpp` (2026-11-05)
 builds `src/log.cpp` with `src/fpu.h` (the mod's own -O2; `-Wl,--wrap=fopen` stands in for a hook in the system's
 file calls). Nine x87/SSE states, each in a child process: the boulder's line (`flds` of 0.75f, `fstpl`, "%.2f") on
 the bare unit faults in the six that claim to (the inexact result unmasked, every exception unmasked, the stack full
